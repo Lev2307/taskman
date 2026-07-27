@@ -1,0 +1,8 @@
+# Compiled binaries
+/taskman
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib

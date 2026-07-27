@@ -1,0 +1,17 @@
+package main
+
+import (
+	"fmt"
+	"os"
+
+	ui "github.com/Lev2307/taskman/internal/ui"
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+func main() {
+	app := ui.New()
+	if _, err := tea.NewProgram(app).Run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}

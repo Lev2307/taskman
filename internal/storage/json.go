@@ -52,3 +52,12 @@ func AddTask(path string, task task.Task) error {
 	tasks = append(tasks, task)
 	return SaveJson(path, tasks)
 }
+
+func GetLastID(path string) (int, error) {
+	data, err := LoadJson(path)
+	if err != nil {
+		return 0, fmt.Errorf("Err with file: %w", err)
+	}
+	last_data_element := data[len(data)-1]
+	return last_data_element.ID, nil
+}

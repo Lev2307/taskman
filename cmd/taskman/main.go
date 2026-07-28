@@ -10,8 +10,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const PATH string = "db.json"
-
 func main() {
 	app := ui.New()
 	if _, err := tea.NewProgram(app).Run(); err != nil {

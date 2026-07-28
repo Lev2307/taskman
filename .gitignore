@@ -8,4 +8,4 @@
 *.dylib
 
 # App data
-db.json
+tasks.json

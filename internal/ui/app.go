@@ -13,11 +13,13 @@ const PATH string = "tasks.json"
 const (
 	screenMain screen = iota
 	screenCreate
+	screenList
 )
 
 type App struct {
 	screen    screen
 	create    CreateModel
+	list      ListModel
 	tasks     []task.Task
 	path      string
 	statusMsg string
@@ -40,6 +42,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.statusMsg = fmt.Sprintf("Task %q created successfully!", msg.task.Title)
 		}
 		return a, nil
+	case TaskListMsg:
+		if msg.err == nil {
+			a.screen = screenList
+		}
 	case tea.KeyMsg:
 		if a.screen == screenMain {
 			switch msg.String() {
@@ -48,8 +54,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.create = NewCreateModel()
 				a.statusMsg = ""
 				return a, nil
+
 			case "2", "l":
-				return a, tea.Quit // TODO: список тасок
+				a.screen = screenList
+				a.list = NewListModel()
+				a.statusMsg = ""
+				return a, a.list.Init()
+
 			case "3", "ctrl+c":
 				return a, tea.Quit
 			}
@@ -62,6 +73,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.create, cmd = a.create.Update(msg)
 		return a, cmd
 	}
+	if a.screen == screenList {
+		var cmd tea.Cmd
+		a.list, cmd = a.list.Update(msg)
+		return a, cmd
+	}
 
 	return a, nil
 }
@@ -69,6 +85,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) View() string {
 	if a.screen == screenCreate {
 		return a.create.View()
+	}
+	if a.screen == screenList {
+		return a.list.View()
 	}
 	view := "It`s a taskman\n\nExisting commands: \n1. Create a new task \n2. Task List \n3. Exit\n\n"
 	if a.statusMsg != "" {

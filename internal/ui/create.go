@@ -122,6 +122,8 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, tea.Cmd) {
 				}
 			}
 			return m, nil
+		case "ctrl+c":
+			return m, tea.Quit
 		default:
 			if msg.Type == tea.KeyRunes {
 				switch m.focusIndex {

@@ -9,7 +9,7 @@ import (
 	task "github.com/Lev2307/taskman/internal/model"
 )
 
-func LoadJson(path string) ([]task.Task, error) {
+func LoadTasksJson(path string) ([]task.Task, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -29,7 +29,7 @@ func LoadJson(path string) ([]task.Task, error) {
 	return tasks, nil
 }
 
-func SaveJson(path string, tasks []task.Task) error {
+func SaveTasksJson(path string, tasks []task.Task) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
@@ -45,16 +45,16 @@ func SaveJson(path string, tasks []task.Task) error {
 }
 
 func AddTask(path string, task task.Task) error {
-	tasks, err := LoadJson(path)
+	tasks, err := LoadTasksJson(path)
 	if err != nil {
 		return err
 	}
 	tasks = append(tasks, task)
-	return SaveJson(path, tasks)
+	return SaveTasksJson(path, tasks)
 }
 
 func GetLastID(path string) (int, error) {
-	data, err := LoadJson(path)
+	data, err := LoadTasksJson(path)
 	if err != nil {
 		return 0, fmt.Errorf("Err with file: %w", err)
 	}

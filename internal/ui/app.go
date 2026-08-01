@@ -14,12 +14,14 @@ const (
 	screenMain screen = iota
 	screenCreate
 	screenList
+	screenDetail
 )
 
 type App struct {
 	screen    screen
 	create    CreateModel
 	list      ListModel
+	detail    DetailModel
 	tasks     []task.Task
 	path      string
 	statusMsg string
@@ -45,6 +47,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TaskListMsg:
 		if msg.err == nil {
 			a.screen = screenList
+		}
+	case TaskDetailMsg:
+		if msg.err == nil {
+			a.screen = screenDetail
 		}
 	case tea.KeyMsg:
 		if a.screen == screenMain {
@@ -78,6 +84,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.list, cmd = a.list.Update(msg)
 		return a, cmd
 	}
+	if a.screen == screenDetail {
+		var cmd tea.Cmd
+		a.detail, cmd = a.detail.Update(msg)
+		return a, cmd
+	}
 
 	return a, nil
 }
@@ -88,6 +99,9 @@ func (a App) View() string {
 	}
 	if a.screen == screenList {
 		return a.list.View()
+	}
+	if a.screen == screenDetail {
+		return a.detail.View()
 	}
 	view := "It`s a taskman\n\nExisting commands: \n1. Create a new task \n2. Task List \n3. Exit\n\n"
 	if a.statusMsg != "" {

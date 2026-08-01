@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	task "github.com/Lev2307/taskman/internal/model"
@@ -11,7 +12,8 @@ import (
 
 type ListModel struct {
 	tasksList    []task.Task
-	selectedTask int
+	taskIdInput  string
+	selectedTask task.Task
 	err          error
 }
 
@@ -39,8 +41,31 @@ func (m ListModel) Update(msg tea.Msg) (ListModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "enter":
+			taskID, err := strconv.Atoi(m.taskIdInput)
+			if err != nil {
+				m.err = fmt.Errorf("Wrong input task id")
+				return m, nil
+			}
+			taskFromDb, errorDb := storage.GetTaskByID(PATH, taskID)
+			if errorDb != nil {
+				m.err = errorDb
+				return m, nil
+			}
+			m.selectedTask = taskFromDb
+			m.err = nil
+			return m, DetailTaskCmd(m.selectedTask, errorDb)
 		case "ctrl+c":
 			return m, tea.Quit
+		case "backspace":
+			if len(m.taskIdInput) > 0 {
+				m.taskIdInput = m.taskIdInput[:len(m.taskIdInput)-1]
+			}
+		default:
+			if msg.Type == tea.KeyRunes {
+				m.taskIdInput += msg.String()
+				m.err = nil
+			}
 		}
 	case TaskListMsg:
 		m.tasksList = msg.listTasks
@@ -54,7 +79,7 @@ func (m ListModel) View() string {
 	b.WriteString("You are on a list page!\n\n")
 	b.WriteString("Here are your tasks 👇\n")
 	for i := range m.tasksList {
-		fmt.Fprintf(&b, "%d. ", i+1)
+		fmt.Fprintf(&b, "%d. ", i)
 		fmt.Fprintf(&b, "%s ", m.tasksList[i].Title)
 		if !m.tasksList[i].DueAt.IsZero() {
 			dueAtFormatted := m.tasksList[i].DueAt.Format("2006-01-02")
@@ -63,11 +88,15 @@ func (m ListModel) View() string {
 			fmt.Fprintf(&b, "(due: —)")
 		}
 		if !m.tasksList[i].Done {
-			fmt.Fprintf(&b, `❌`)
+			fmt.Fprintf(&b, ` ❌`)
 		} else {
-			fmt.Fprintf(&b, `✅`)
+			fmt.Fprintf(&b, ` ✅`)
 		}
-		b.WriteString("\n")
+		b.WriteString("\n\n")
+	}
+	fmt.Fprintf(&b, "You can choose task to work with by entering task id in form below: %s", m.taskIdInput)
+	if m.err != nil {
+		fmt.Fprintf(&b, "\n\n⚠️  %s", m.err.Error())
 	}
 	return b.String()
 }

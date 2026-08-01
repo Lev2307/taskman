@@ -53,6 +53,22 @@ func AddTask(path string, task task.Task) error {
 	return SaveTasksJson(path, tasks)
 }
 
+func GetTaskByID(path string, taskID int) (task.Task, error) {
+	tasks, err := LoadTasksJson(path)
+	if err != nil {
+		return task.Task{}, nil
+	}
+	tasksMap := make(map[int]task.Task, len(tasks))
+	for i := range tasks {
+		tasksMap[tasks[i].ID] = tasks[i]
+	}
+	if neededTask, ok := tasksMap[taskID]; ok {
+		return neededTask, nil
+	} else {
+		return task.Task{}, fmt.Errorf("Task with given id was not found")
+	}
+}
+
 func GetLastID(path string) (int, error) {
 	data, err := LoadTasksJson(path)
 	if err != nil {

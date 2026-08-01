@@ -74,6 +74,9 @@ func GetLastID(path string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("Err with file: %w", err)
 	}
+	if len(data) == 0 {
+		return 0, nil
+	}
 	last_data_element := data[len(data)-1]
 	return last_data_element.ID, nil
 }

@@ -82,12 +82,12 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, tea.Cmd) {
 			}
 			m.focusIndex++
 			return m, nil
-		case "up", "k":
+		case "up":
 			if m.focusIndex == 2 && m.tagCursor > 0 {
 				m.tagCursor--
 			}
 			return m, nil
-		case "down", "j":
+		case "down":
 			if m.focusIndex == 2 && m.tagCursor < len(m.tagChoices)-1 {
 				m.tagCursor++
 			}

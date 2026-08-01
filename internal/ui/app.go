@@ -52,6 +52,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			a.screen = screenDetail
 		}
+	case BackToListMsg:
+		a.screen = screenList
+		a.list = NewListModel()
+		return a, a.list.Init()
+	case BackToMainPageMsg:
+		a.screen = screenMain
 	case tea.KeyMsg:
 		if a.screen == screenMain {
 			switch msg.String() {

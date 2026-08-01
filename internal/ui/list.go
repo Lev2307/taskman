@@ -11,16 +11,17 @@ import (
 )
 
 type ListModel struct {
-	tasksList    []task.Task
-	taskIdInput  string
-	selectedTask task.Task
-	err          error
+	tasksList   []task.Task
+	taskIdInput string
+	err         error
 }
 
 type TaskListMsg struct {
 	listTasks []task.Task
 	err       error
 }
+
+type BackToMainPageMsg struct{}
 
 func NewListModel() ListModel {
 	return ListModel{}
@@ -30,6 +31,12 @@ func ListTasksCmd(path string) tea.Cmd {
 	return func() tea.Msg {
 		tasks, err := storage.LoadTasksJson(path)
 		return TaskListMsg{listTasks: tasks, err: err}
+	}
+}
+
+func BackToMainPageCmd() tea.Cmd {
+	return func() tea.Msg {
+		return BackToMainPageMsg{}
 	}
 }
 
@@ -52,15 +59,16 @@ func (m ListModel) Update(msg tea.Msg) (ListModel, tea.Cmd) {
 				m.err = errorDb
 				return m, nil
 			}
-			m.selectedTask = taskFromDb
 			m.err = nil
-			return m, DetailTaskCmd(m.selectedTask, errorDb)
+			return m, DetailTaskCmd(taskFromDb, errorDb)
 		case "ctrl+c":
 			return m, tea.Quit
 		case "backspace":
 			if len(m.taskIdInput) > 0 {
 				m.taskIdInput = m.taskIdInput[:len(m.taskIdInput)-1]
 			}
+		case "esc":
+			return m, BackToMainPageCmd()
 		default:
 			if msg.Type == tea.KeyRunes {
 				m.taskIdInput += msg.String()
@@ -79,7 +87,7 @@ func (m ListModel) View() string {
 	b.WriteString("You are on a list page!\n\n")
 	b.WriteString("Here are your tasks 👇\n")
 	for i := range m.tasksList {
-		fmt.Fprintf(&b, "%d. ", i)
+		fmt.Fprintf(&b, "%d. ", m.tasksList[i].ID)
 		fmt.Fprintf(&b, "%s ", m.tasksList[i].Title)
 		if !m.tasksList[i].DueAt.IsZero() {
 			dueAtFormatted := m.tasksList[i].DueAt.Format("2006-01-02")

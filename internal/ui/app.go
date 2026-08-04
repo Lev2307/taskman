@@ -58,6 +58,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.list.Init()
 	case BackToMainPageMsg:
 		a.screen = screenMain
+	case TaskToggledMsg:
+		a.screen = screenDetail
+		a.detail = NewDetailModel(msg.taskID)
+	case DeleteTaskMsg:
+		a.screen = screenList
+		a.list = NewListModel()
+		var cmd tea.Cmd
+		a.list, cmd = a.list.Update(msg)
+		return a, tea.Batch(cmd, a.list.Init())
 	case tea.KeyMsg:
 		if a.screen == screenMain {
 			switch msg.String() {

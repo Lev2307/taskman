@@ -56,7 +56,7 @@ func AddTask(path string, task task.Task) error {
 func GetTaskByID(path string, taskID int) (task.Task, error) {
 	tasks, err := LoadTasksJson(path)
 	if err != nil {
-		return task.Task{}, nil
+		return task.Task{}, err
 	}
 	tasksMap := make(map[int]task.Task, len(tasks))
 	for i := range tasks {
@@ -65,18 +65,52 @@ func GetTaskByID(path string, taskID int) (task.Task, error) {
 	if neededTask, ok := tasksMap[taskID]; ok {
 		return neededTask, nil
 	} else {
-		return task.Task{}, fmt.Errorf("Task with given id was not found")
+		return task.Task{}, fmt.Errorf("task with given id was not found")
 	}
 }
 
 func GetLastID(path string) (int, error) {
 	data, err := LoadTasksJson(path)
 	if err != nil {
-		return 0, fmt.Errorf("Err with file: %w", err)
+		return 0, fmt.Errorf("err with file: %w", err)
 	}
 	if len(data) == 0 {
 		return 0, nil
 	}
 	last_data_element := data[len(data)-1]
 	return last_data_element.ID, nil
+}
+
+func ToggleDone(path string, taskID int) error {
+	allTasks, err := LoadTasksJson(path)
+	if err != nil {
+		return err
+	}
+	for i := range allTasks {
+		if allTasks[i].ID == taskID {
+			allTasks[i].Done = !allTasks[i].Done
+		}
+	}
+	return SaveTasksJson(path, allTasks)
+}
+
+func DeleteTask(path string, taskID int) error {
+	allTasks, err := LoadTasksJson(path)
+	if err != nil {
+		return err
+	}
+	idx := -1
+	for i := range allTasks {
+		if allTasks[i].ID == taskID {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return fmt.Errorf("task with given id was not found")
+	} else {
+		newTasks := allTasks[:idx]
+		newTasks = append(newTasks, allTasks[idx+1:]...)
+		return SaveTasksJson(path, newTasks)
+	}
 }

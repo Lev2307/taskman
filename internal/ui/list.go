@@ -13,6 +13,7 @@ import (
 type ListModel struct {
 	tasksList   []task.Task
 	taskIdInput string
+	statusMsg   string
 	err         error
 }
 
@@ -78,6 +79,12 @@ func (m ListModel) Update(msg tea.Msg) (ListModel, tea.Cmd) {
 	case TaskListMsg:
 		m.tasksList = msg.listTasks
 		m.err = msg.err
+	case DeleteTaskMsg:
+		if msg.err == nil {
+			m.statusMsg = "🚮 Your task `" + msg.title + "` was deleted successfully!"
+		} else {
+			m.err = fmt.Errorf("error while deleting: %w", msg.err)
+		}
 	}
 	return m, nil
 }
@@ -85,26 +92,35 @@ func (m ListModel) Update(msg tea.Msg) (ListModel, tea.Cmd) {
 func (m ListModel) View() string {
 	var b strings.Builder
 	b.WriteString("You are on a list page!\n\n")
-	b.WriteString("Here are your tasks 👇\n")
-	for i := range m.tasksList {
-		fmt.Fprintf(&b, "%d. ", m.tasksList[i].ID)
-		fmt.Fprintf(&b, "%s ", m.tasksList[i].Title)
-		if !m.tasksList[i].DueAt.IsZero() {
-			dueAtFormatted := m.tasksList[i].DueAt.Format("2006-01-02")
-			fmt.Fprintf(&b, "(due: %s)", dueAtFormatted)
-		} else {
-			fmt.Fprintf(&b, "(due: —)")
+	if len(m.tasksList) == 0 {
+		b.WriteString(`✏️` + "  You haven`t created any tasks yet... Press [esc] and create a new one!\n\n")
+	} else {
+		b.WriteString("Here are your tasks 👇\n")
+		for i := range m.tasksList {
+			fmt.Fprintf(&b, "%d. ", m.tasksList[i].ID)
+			fmt.Fprintf(&b, "%s ", m.tasksList[i].Title)
+			if !m.tasksList[i].DueAt.IsZero() {
+				dueAtFormatted := m.tasksList[i].DueAt.Format("2006-01-02")
+				fmt.Fprintf(&b, "(due: %s)", dueAtFormatted)
+			} else {
+				fmt.Fprintf(&b, "(due: —)")
+			}
+			if !m.tasksList[i].Done {
+				fmt.Fprintf(&b, ` ❌`)
+			} else {
+				fmt.Fprintf(&b, ` ✅`)
+			}
+			b.WriteString("\n\n")
 		}
-		if !m.tasksList[i].Done {
-			fmt.Fprintf(&b, ` ❌`)
-		} else {
-			fmt.Fprintf(&b, ` ✅`)
+		fmt.Fprintf(&b, "You can choose task to work with by entering task id in form below: %s", m.taskIdInput)
+		if m.err != nil {
+			fmt.Fprintf(&b, "\n\n⚠️  %s", m.err.Error())
 		}
-		b.WriteString("\n\n")
 	}
-	fmt.Fprintf(&b, "You can choose task to work with by entering task id in form below: %s", m.taskIdInput)
-	if m.err != nil {
-		fmt.Fprintf(&b, "\n\n⚠️  %s", m.err.Error())
+
+	if m.statusMsg != "" {
+		b.WriteString("\n" + m.statusMsg + "\n")
 	}
+
 	return b.String()
 }

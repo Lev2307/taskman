@@ -15,6 +15,7 @@ type DetailModel struct {
 	statusID     int
 	statusMsg    string
 	err          error
+	statusDelete bool
 }
 
 type TaskDetailMsg struct {
@@ -32,6 +33,10 @@ type BackToListMsg struct{}
 type DeleteTaskMsg struct {
 	title string
 	err   error
+}
+
+type RedirectToEditTask struct {
+	task task.Task
 }
 
 type ClearStatusMsg struct {
@@ -70,12 +75,18 @@ func DeleteTaskCmd(path, title string, taskID int) tea.Cmd {
 	}
 }
 
-func NewDetailModel(taskID int) DetailModel {
+func redirectToEditTaskCmd(task task.Task) tea.Cmd {
+	return func() tea.Msg {
+		return RedirectToEditTask{task: task}
+	}
+}
+
+func NewDetailModel(taskID int, statusMessage string) DetailModel {
 	task, err := storage.GetTaskByID(PATH, taskID)
 	if err != nil {
-		return DetailModel{err: err}
+		return DetailModel{err: err, statusMsg: "error"}
 	}
-	return DetailModel{detailedTask: task}
+	return DetailModel{detailedTask: task, statusMsg: statusMessage}
 }
 
 func (m DetailModel) Update(msg tea.Msg) (DetailModel, tea.Cmd) {
@@ -84,6 +95,18 @@ func (m DetailModel) Update(msg tea.Msg) (DetailModel, tea.Cmd) {
 		m.detailedTask = msg.detailTaskMsg
 		return m, nil
 	case tea.KeyMsg:
+		if m.statusDelete {
+			switch msg.String() {
+			case "y", "Y":
+				m.statusDelete = false
+				return m, DeleteTaskCmd(PATH, m.detailedTask.Title, m.detailedTask.ID)
+			case "n", "N", "esc":
+				m.statusDelete = false
+			case "ctrl+c":
+				return m, tea.Quit
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -98,7 +121,10 @@ func (m DetailModel) Update(msg tea.Msg) (DetailModel, tea.Cmd) {
 				return m, toggleDoneCmd(m.detailedTask.ID)
 			}
 		case "x":
-			return m, DeleteTaskCmd(PATH, m.detailedTask.Title, m.detailedTask.ID)
+			m.statusDelete = true
+			return m, nil
+		case "e":
+			return m, redirectToEditTaskCmd(m.detailedTask)
 		}
 	case ClearStatusMsg:
 		if msg.id == m.statusID {
@@ -142,10 +168,14 @@ func (m DetailModel) View() string {
 	}
 	b.WriteString("___________________________________________________________\n\n")
 
-	if m.detailedTask.Done {
-		b.WriteString("[e] edit    [space] toggle UNdone    [x] delete    [esc] back    [ctrl+c] quit\n\n")
+	if m.statusDelete {
+		fmt.Fprintf(&b, "Delete \"%s\"? [y/n]\n\n", m.detailedTask.Title)
 	} else {
-		b.WriteString("[e] edit    [space] toggle done    [x] delete    [esc] back    [ctrl+c] quit\n\n")
+		if m.detailedTask.Done {
+			b.WriteString("[e] edit    [space] toggle UNdone    [x] delete    [esc] back    [ctrl+c] quit\n\n")
+		} else {
+			b.WriteString("[e] edit    [space] toggle done    [x] delete    [esc] back    [ctrl+c] quit\n\n")
+		}
 	}
 
 	if m.statusMsg != "" {

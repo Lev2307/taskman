@@ -37,7 +37,7 @@ func (a App) Init() tea.Cmd {
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case taskAddedMsg:
+	case TaskAddedMsg:
 		if msg.err == nil {
 			a.tasks = append(a.tasks, msg.task)
 			a.screen = screenMain
@@ -52,6 +52,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			a.screen = screenDetail
 		}
+	case RedirectToEditTask:
+		a.screen = screenCreate
+		a.create = NewCreateModel(modeEdit, msg.task)
 	case BackToListMsg:
 		a.screen = screenList
 		a.list = NewListModel()
@@ -60,19 +63,26 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.screen = screenMain
 	case TaskToggledMsg:
 		a.screen = screenDetail
-		a.detail = NewDetailModel(msg.taskID)
+		a.detail = NewDetailModel(msg.taskID, "")
 	case DeleteTaskMsg:
 		a.screen = screenList
 		a.list = NewListModel()
 		var cmd tea.Cmd
 		a.list, cmd = a.list.Update(msg)
 		return a, tea.Batch(cmd, a.list.Init())
+	case TaskEditedMsg:
+		if msg.err == nil {
+			a.screen = screenDetail
+			a.detail = NewDetailModel(msg.task.ID, "🟢 Your task was edited successfully!!")
+			return a, nil
+		}
+		// ошибка: остаёмся на форме, msg дойдёт до CreateModel ниже
 	case tea.KeyMsg:
 		if a.screen == screenMain {
 			switch msg.String() {
 			case "1", "a":
 				a.screen = screenCreate
-				a.create = NewCreateModel()
+				a.create = NewCreateModel(modeCreate, task.Task{})
 				a.statusMsg = ""
 				return a, nil
 

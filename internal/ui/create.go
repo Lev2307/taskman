@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -15,6 +16,13 @@ const dueAtLayout = "2006-01-02"
 
 var availableTags = []string{"work", "personal", "sport", "urgent"}
 
+type formMode int
+
+const (
+	modeCreate formMode = iota
+	modeEdit
+)
+
 type CreateModel struct {
 	titleInput string
 	notesInput string
@@ -23,32 +31,73 @@ type CreateModel struct {
 	tagCursor   int              // на каком теге сейчас курсор
 	tagSelected map[int]struct{} // какие индексы отмечены
 
-	dueAtInput string
-	focusIndex int // какое поле сейчас активно
-	err        error
+	dueAtInput     string
+	focusIndex     int // какое поле сейчас активно
+	err            error
+	taskForEditing task.Task // таска, предназначенная для редактирования: - нужна чтобы автоматически заполнить поля значениями
+	mode           formMode  // какой сейчас вариант работы с таской: modeCreate - создание, modeEdit - редактирование
 }
 
-type taskAddedMsg struct {
+type TaskAddedMsg struct {
 	task task.Task
 	err  error
 }
 
-func NewCreateModel() CreateModel {
-	return CreateModel{
+type TaskEditedMsg struct {
+	task task.Task
+	err  error
+}
+
+func NewCreateModel(mode formMode, t task.Task) CreateModel {
+	m := CreateModel{
+		tagChoices:  slices.Clone(availableTags),
 		tagSelected: make(map[int]struct{}),
-		tagChoices:  availableTags,
+		mode:        mode,
 	}
+	if mode == modeCreate {
+		return m
+	}
+	m.taskForEditing = t
+	m.titleInput = t.Title
+	m.notesInput = t.Notes
+	if !t.DueAt.IsZero() {
+		m.dueAtInput = t.DueAt.Format(dueAtLayout)
+	}
+	for _, tag := range t.Tags {
+		if !slices.Contains(m.tagChoices, tag) {
+			m.tagChoices = append(m.tagChoices, tag)
+		}
+	}
+
+	for i, choice := range m.tagChoices {
+		if slices.Contains(t.Tags, choice) {
+			m.tagSelected[i] = struct{}{}
+		}
+	}
+	return m
 }
 
 func AddTaskCmd(path string, t task.Task) tea.Cmd {
 	return func() tea.Msg {
 		err := storage.AddTask(path, t)
-		return taskAddedMsg{task: t, err: err}
+		return TaskAddedMsg{task: t, err: err}
+	}
+}
+
+func EditTaskCmd(path string, t task.Task) tea.Cmd {
+	return func() tea.Msg {
+		err := storage.EditTask(path, t)
+		return TaskEditedMsg{task: t, err: err}
 	}
 }
 
 func (m CreateModel) Update(msg tea.Msg) (CreateModel, tea.Cmd) {
 	switch msg := msg.(type) {
+	case TaskEditedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		}
+		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
@@ -58,7 +107,7 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, tea.Cmd) {
 					m.err = fmt.Errorf("Wrong data layout: %w", err)
 					return m, nil
 				}
-				if due.Before(time.Now()) {
+				if m.mode == modeCreate && due.Before(time.Now()) {
 					m.err = fmt.Errorf("Due time is in past")
 					return m, nil
 				}
@@ -66,19 +115,26 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, tea.Cmd) {
 				for i := range m.tagSelected {
 					tags = append(tags, m.tagChoices[i])
 				}
-				lastId, err := storage.GetLastID(PATH)
-				if err != nil {
-					return m, nil
+				if m.mode == modeCreate {
+					lastId, err := storage.GetLastID(PATH)
+					if err != nil {
+						return m, nil
+					}
+					t := task.Task{
+						ID:        lastId + 1,
+						Title:     m.titleInput,
+						Notes:     m.notesInput,
+						Tags:      tags,
+						DueAt:     due,
+						CreatedAt: time.Now(),
+					}
+					return m, AddTaskCmd(PATH, t)
 				}
-				t := task.Task{
-					ID:        lastId + 1,
-					Title:     m.titleInput,
-					Notes:     m.notesInput,
-					Tags:      tags,
-					DueAt:     due,
-					CreatedAt: time.Now(),
-				}
-				return m, AddTaskCmd(PATH, t)
+				m.taskForEditing.Title = m.titleInput
+				m.taskForEditing.Notes = m.notesInput
+				m.taskForEditing.Tags = tags
+				m.taskForEditing.DueAt = due
+				return m, EditTaskCmd(PATH, m.taskForEditing)
 			}
 			m.focusIndex++
 			return m, nil
@@ -143,6 +199,10 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, tea.Cmd) {
 
 func (m CreateModel) View() string {
 	var b strings.Builder
+
+	if m.mode == modeEdit {
+		fmt.Fprintf(&b, "\n✎  You are editing task with title - '%s'\n\n", m.taskForEditing.Title)
+	}
 
 	fmt.Fprintf(&b, "Title: %s\n", m.titleInput)
 	fmt.Fprintf(&b, "Notes: %s\n", m.notesInput)

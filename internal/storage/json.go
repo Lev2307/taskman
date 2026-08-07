@@ -114,3 +114,17 @@ func DeleteTask(path string, taskID int) error {
 		return SaveTasksJson(path, newTasks)
 	}
 }
+
+func EditTask(path string, task task.Task) error {
+	allTasks, err := LoadTasksJson(path)
+	if err != nil {
+		return err
+	}
+	for i := range allTasks {
+		if task.ID == allTasks[i].ID {
+			allTasks[i] = task
+			return SaveTasksJson(path, allTasks)
+		}
+	}
+	return fmt.Errorf("task with given id was not found")
+}

@@ -180,6 +180,8 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, tea.Cmd) {
 			return m, nil
 		case "ctrl+c":
 			return m, tea.Quit
+		case "esc":
+			return m, BackToMainPageCmd()
 		default:
 			if msg.Type == tea.KeyRunes {
 				switch m.focusIndex {

@@ -6,6 +6,6 @@
 *.dll
 *.so
 *.dylib
-
+*.claude
 # App data
 tasks.json

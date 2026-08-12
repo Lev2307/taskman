@@ -24,6 +24,7 @@ const (
 )
 
 type CreateModel struct {
+	store      *storage.Store
 	titleInput string
 	notesInput string
 
@@ -48,11 +49,12 @@ type TaskEditedMsg struct {
 	err  error
 }
 
-func NewCreateModel(mode formMode, t task.Task) CreateModel {
+func NewCreateModel(s *storage.Store, mode formMode, t task.Task) CreateModel {
 	m := CreateModel{
 		tagChoices:  slices.Clone(availableTags),
 		tagSelected: make(map[int]struct{}),
 		mode:        mode,
+		store:       s,
 	}
 	if mode == modeCreate {
 		return m
@@ -77,16 +79,16 @@ func NewCreateModel(mode formMode, t task.Task) CreateModel {
 	return m
 }
 
-func AddTaskCmd(path string, t task.Task) tea.Cmd {
+func AddTaskCmd(s *storage.Store, t task.Task) tea.Cmd {
 	return func() tea.Msg {
-		err := storage.AddTask(path, t)
-		return TaskAddedMsg{task: t, err: err}
+		task, err := s.Add(t)
+		return TaskAddedMsg{task: task, err: err}
 	}
 }
 
-func EditTaskCmd(path string, t task.Task) tea.Cmd {
+func EditTaskCmd(s *storage.Store, t task.Task) tea.Cmd {
 	return func() tea.Msg {
-		err := storage.EditTask(path, t)
+		err := s.Edit(t)
 		return TaskEditedMsg{task: t, err: err}
 	}
 }
@@ -116,25 +118,20 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, tea.Cmd) {
 					tags = append(tags, m.tagChoices[i])
 				}
 				if m.mode == modeCreate {
-					lastId, err := storage.GetLastID(PATH)
-					if err != nil {
-						return m, nil
-					}
 					t := task.Task{
-						ID:        lastId + 1,
 						Title:     m.titleInput,
 						Notes:     m.notesInput,
 						Tags:      tags,
 						DueAt:     due,
 						CreatedAt: time.Now(),
 					}
-					return m, AddTaskCmd(PATH, t)
+					return m, AddTaskCmd(m.store, t)
 				}
 				m.taskForEditing.Title = m.titleInput
 				m.taskForEditing.Notes = m.notesInput
 				m.taskForEditing.Tags = tags
 				m.taskForEditing.DueAt = due
-				return m, EditTaskCmd(PATH, m.taskForEditing)
+				return m, EditTaskCmd(m.store, m.taskForEditing)
 			}
 			m.focusIndex++
 			return m, nil

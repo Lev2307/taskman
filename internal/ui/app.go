@@ -4,12 +4,12 @@ import (
 	"fmt"
 
 	task "github.com/Lev2307/taskman/internal/model"
+	storage "github.com/Lev2307/taskman/internal/storage"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type screen int
 
-const PATH string = "tasks.json"
 const (
 	screenMain screen = iota
 	screenCreate
@@ -23,12 +23,12 @@ type App struct {
 	list      ListModel
 	detail    DetailModel
 	tasks     []task.Task
-	path      string
+	store     *storage.Store
 	statusMsg string
 }
 
-func New() App {
-	return App{}
+func New(s *storage.Store) App {
+	return App{store: s}
 }
 
 func (a App) Init() tea.Cmd {
@@ -54,26 +54,26 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case RedirectToEditTask:
 		a.screen = screenCreate
-		a.create = NewCreateModel(modeEdit, msg.task)
+		a.create = NewCreateModel(a.store, modeEdit, msg.task)
 	case BackToListMsg:
 		a.screen = screenList
-		a.list = NewListModel()
+		a.list = NewListModel(a.store)
 		return a, a.list.Init()
 	case BackToMainPageMsg:
 		a.screen = screenMain
 	case TaskToggledMsg:
 		a.screen = screenDetail
-		a.detail = NewDetailModel(msg.taskID, "")
+		a.detail = NewDetailModel(a.store, msg.taskID, "")
 	case DeleteTaskMsg:
 		a.screen = screenList
-		a.list = NewListModel()
+		a.list = NewListModel(a.store)
 		var cmd tea.Cmd
 		a.list, cmd = a.list.Update(msg)
 		return a, tea.Batch(cmd, a.list.Init())
 	case TaskEditedMsg:
 		if msg.err == nil {
 			a.screen = screenDetail
-			a.detail = NewDetailModel(msg.task.ID, "🟢 Your task was edited successfully!!")
+			a.detail = NewDetailModel(a.store, msg.task.ID, "🟢 Your task was edited successfully!!")
 			return a, nil
 		}
 		// ошибка: остаёмся на форме, msg дойдёт до CreateModel ниже
@@ -82,13 +82,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "1", "a":
 				a.screen = screenCreate
-				a.create = NewCreateModel(modeCreate, task.Task{})
+				a.create = NewCreateModel(a.store, modeCreate, task.Task{})
 				a.statusMsg = ""
 				return a, nil
 
 			case "2", "l":
 				a.screen = screenList
-				a.list = NewListModel()
+				a.list = NewListModel(a.store)
 				a.statusMsg = ""
 				return a, a.list.Init()
 

@@ -11,6 +11,7 @@ import (
 )
 
 type ListModel struct {
+	store       *storage.Store
 	tasksList   []task.Task
 	taskIdInput string
 	statusMsg   string
@@ -24,13 +25,13 @@ type TaskListMsg struct {
 
 type BackToMainPageMsg struct{}
 
-func NewListModel() ListModel {
-	return ListModel{}
+func NewListModel(s *storage.Store) ListModel {
+	return ListModel{store: s}
 }
 
-func ListTasksCmd(path string) tea.Cmd {
+func ListTasksCmd(s *storage.Store) tea.Cmd {
 	return func() tea.Msg {
-		tasks, err := storage.LoadTasksJson(path)
+		tasks, err := s.List()
 		return TaskListMsg{listTasks: tasks, err: err}
 	}
 }
@@ -42,7 +43,7 @@ func BackToMainPageCmd() tea.Cmd {
 }
 
 func (m ListModel) Init() tea.Cmd {
-	return ListTasksCmd(PATH)
+	return ListTasksCmd(m.store)
 }
 
 func (m ListModel) Update(msg tea.Msg) (ListModel, tea.Cmd) {
@@ -55,7 +56,7 @@ func (m ListModel) Update(msg tea.Msg) (ListModel, tea.Cmd) {
 				m.err = fmt.Errorf("Wrong input task id")
 				return m, nil
 			}
-			taskFromDb, errorDb := storage.GetTaskByID(PATH, taskID)
+			taskFromDb, errorDb := m.store.GetByID(taskID)
 			if errorDb != nil {
 				m.err = errorDb
 				return m, nil

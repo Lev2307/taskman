@@ -2,35 +2,49 @@ package storage
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	task "github.com/Lev2307/taskman/internal/model"
 )
 
-func LoadTasksJson(path string) ([]task.Task, error) {
-	f, err := os.Open(path)
+var ErrTaskNotFound = errors.New("task not found")
+
+type Store struct {
+	mu   sync.Mutex
+	path string
+}
+
+func NewStore(path string) *Store {
+	return &Store{path: path}
+}
+
+// load чтение файла. Вызывающий обязан держать s.mu.
+func (s *Store) load() ([]task.Task, error) {
+	f, err := os.Open(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []task.Task{}, nil
+			return nil, nil
 		}
-		return []task.Task{}, fmt.Errorf("open file: %w", err)
+		return nil, fmt.Errorf("open file %s: %w", s.path, err)
 	}
 	defer f.Close()
 
 	var tasks []task.Task
 	if err := json.NewDecoder(f).Decode(&tasks); err != nil {
-		if err == io.EOF {
-			return []task.Task{}, nil
+		if errors.Is(err, io.EOF) {
+			return nil, nil
 		}
-		return []task.Task{}, fmt.Errorf("decode: %w", err)
+		return nil, fmt.Errorf("decode: %w", err)
 	}
 	return tasks, nil
 }
 
-func SaveTasksJson(path string, tasks []task.Task) error {
-	f, err := os.Create(path)
+func (s *Store) save(tasks []task.Task) error {
+	f, err := os.Create(s.path)
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
@@ -44,17 +58,34 @@ func SaveTasksJson(path string, tasks []task.Task) error {
 	return nil
 }
 
-func AddTask(path string, task task.Task) error {
-	tasks, err := LoadTasksJson(path)
+// при помощи mutex
+func (s *Store) Add(t task.Task) (task.Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tasks, err := s.load()
 	if err != nil {
-		return err
+		return task.Task{}, err
 	}
-	tasks = append(tasks, task)
-	return SaveTasksJson(path, tasks)
+	maxID := 0
+	for _, cur := range tasks {
+		if cur.ID > maxID {
+			maxID = cur.ID
+		}
+	}
+	t.ID = maxID + 1
+	tasks = append(tasks, t)
+	if err := s.save(tasks); err != nil {
+		return task.Task{}, err
+	}
+	return t, nil
 }
 
-func GetTaskByID(path string, taskID int) (task.Task, error) {
-	tasks, err := LoadTasksJson(path)
+func (s *Store) GetByID(taskID int) (task.Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tasks, err := s.load()
 	if err != nil {
 		return task.Task{}, err
 	}
@@ -65,37 +96,30 @@ func GetTaskByID(path string, taskID int) (task.Task, error) {
 	if neededTask, ok := tasksMap[taskID]; ok {
 		return neededTask, nil
 	} else {
-		return task.Task{}, fmt.Errorf("task with given id was not found")
+		return task.Task{}, ErrTaskNotFound
 	}
 }
 
-func GetLastID(path string) (int, error) {
-	data, err := LoadTasksJson(path)
-	if err != nil {
-		return 0, fmt.Errorf("err with file: %w", err)
-	}
-	if len(data) == 0 {
-		return 0, nil
-	}
-	last_data_element := data[len(data)-1]
-	return last_data_element.ID, nil
-}
-
-func ToggleDone(path string, taskID int) error {
-	allTasks, err := LoadTasksJson(path)
+func (s *Store) ToggleDone(taskID int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	allTasks, err := s.load()
 	if err != nil {
 		return err
 	}
 	for i := range allTasks {
 		if allTasks[i].ID == taskID {
 			allTasks[i].Done = !allTasks[i].Done
+			return s.save(allTasks)
 		}
 	}
-	return SaveTasksJson(path, allTasks)
+	return ErrTaskNotFound
 }
 
-func DeleteTask(path string, taskID int) error {
-	allTasks, err := LoadTasksJson(path)
+func (s *Store) Delete(taskID int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	allTasks, err := s.load()
 	if err != nil {
 		return err
 	}
@@ -107,24 +131,32 @@ func DeleteTask(path string, taskID int) error {
 		}
 	}
 	if idx == -1 {
-		return fmt.Errorf("task with given id was not found")
+		return ErrTaskNotFound
 	} else {
 		newTasks := allTasks[:idx]
 		newTasks = append(newTasks, allTasks[idx+1:]...)
-		return SaveTasksJson(path, newTasks)
+		return s.save(newTasks)
 	}
 }
 
-func EditTask(path string, task task.Task) error {
-	allTasks, err := LoadTasksJson(path)
+func (s *Store) Edit(t task.Task) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	allTasks, err := s.load()
 	if err != nil {
 		return err
 	}
 	for i := range allTasks {
-		if task.ID == allTasks[i].ID {
-			allTasks[i] = task
-			return SaveTasksJson(path, allTasks)
+		if t.ID == allTasks[i].ID {
+			allTasks[i] = t
+			return s.save(allTasks)
 		}
 	}
-	return fmt.Errorf("task with given id was not found")
+	return ErrTaskNotFound
+}
+
+func (s *Store) List() ([]task.Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.load()
 }

@@ -11,6 +11,7 @@ import (
 )
 
 type DetailModel struct {
+	store        *storage.Store
 	detailedTask task.Task
 	statusID     int
 	statusMsg    string
@@ -55,9 +56,9 @@ func backToListCmd() tea.Cmd {
 	}
 }
 
-func toggleDoneCmd(taskID int) tea.Cmd {
+func toggleDoneCmd(s *storage.Store, taskID int) tea.Cmd {
 	return func() tea.Msg {
-		err := storage.ToggleDone(PATH, taskID)
+		err := s.ToggleDone(taskID)
 		return TaskToggledMsg{taskID: taskID, err: err}
 	}
 }
@@ -68,9 +69,9 @@ func ClearStatusCmd(d time.Duration, statusID int) tea.Cmd {
 	})
 }
 
-func DeleteTaskCmd(path, title string, taskID int) tea.Cmd {
+func DeleteTaskCmd(s *storage.Store, title string, taskID int) tea.Cmd {
 	return func() tea.Msg {
-		err := storage.DeleteTask(path, taskID)
+		err := s.Delete(taskID)
 		return DeleteTaskMsg{title: title, err: err}
 	}
 }
@@ -81,12 +82,12 @@ func redirectToEditTaskCmd(task task.Task) tea.Cmd {
 	}
 }
 
-func NewDetailModel(taskID int, statusMessage string) DetailModel {
-	task, err := storage.GetTaskByID(PATH, taskID)
+func NewDetailModel(s *storage.Store, taskID int, statusMessage string) DetailModel {
+	task, err := s.GetByID(taskID)
 	if err != nil {
-		return DetailModel{err: err, statusMsg: "error"}
+		return DetailModel{err: err, statusMsg: "error", store: s}
 	}
-	return DetailModel{detailedTask: task, statusMsg: statusMessage}
+	return DetailModel{detailedTask: task, statusMsg: statusMessage, store: s}
 }
 
 func (m DetailModel) Update(msg tea.Msg) (DetailModel, tea.Cmd) {
@@ -99,7 +100,7 @@ func (m DetailModel) Update(msg tea.Msg) (DetailModel, tea.Cmd) {
 			switch msg.String() {
 			case "y", "Y":
 				m.statusDelete = false
-				return m, DeleteTaskCmd(PATH, m.detailedTask.Title, m.detailedTask.ID)
+				return m, DeleteTaskCmd(m.store, m.detailedTask.Title, m.detailedTask.ID)
 			case "n", "N", "esc":
 				m.statusDelete = false
 			case "ctrl+c":
@@ -118,7 +119,7 @@ func (m DetailModel) Update(msg tea.Msg) (DetailModel, tea.Cmd) {
 				m.statusID += 1
 				return m, ClearStatusCmd(2*time.Second, m.statusID)
 			} else {
-				return m, toggleDoneCmd(m.detailedTask.ID)
+				return m, toggleDoneCmd(m.store, m.detailedTask.ID)
 			}
 		case "x":
 			m.statusDelete = true

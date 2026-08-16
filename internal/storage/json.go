@@ -11,7 +11,7 @@ import (
 	task "github.com/Lev2307/taskman/internal/model"
 )
 
-var ErrTaskNotFound = errors.New("task not found")
+var ErrTaskNotFound = errors.New("task with given id not found")
 
 type Store struct {
 	mu   sync.Mutex
@@ -100,7 +100,7 @@ func (s *Store) GetByID(taskID int) (task.Task, error) {
 	}
 }
 
-func (s *Store) ToggleDone(taskID int) error {
+func (s *Store) SetDone(taskID int, done bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	allTasks, err := s.load()
@@ -109,7 +109,7 @@ func (s *Store) ToggleDone(taskID int) error {
 	}
 	for i := range allTasks {
 		if allTasks[i].ID == taskID {
-			allTasks[i].Done = !allTasks[i].Done
+			allTasks[i].Done = done
 			return s.save(allTasks)
 		}
 	}

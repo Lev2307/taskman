@@ -17,5 +17,9 @@ func NewServer(s *storage.Store) *Server {
 func (srv *Server) Routes() http.Handler {
 	mux := http.NewServeMux() // mux автоматически отсеивает неиспользуемые методы для url: +rep
 	mux.HandleFunc("GET /tasks", srv.handleListTasks)
+	mux.HandleFunc("GET /tasks/{id}", srv.handleDetailTask)
+	mux.HandleFunc("DELETE /tasks/{id}", srv.handleDeleteTask)
+	mux.HandleFunc("PUT /tasks/{id}", srv.handleEditTask)
+	mux.HandleFunc("PUT /tasks/{id}/done", srv.handleToggleDoneTask)
 	return mux
 }

@@ -56,9 +56,9 @@ func backToListCmd() tea.Cmd {
 	}
 }
 
-func toggleDoneCmd(s *storage.Store, taskID int) tea.Cmd {
+func toggleDoneCmd(s *storage.Store, taskID int, done bool) tea.Cmd {
 	return func() tea.Msg {
-		err := s.ToggleDone(taskID)
+		err := s.SetDone(taskID, done)
 		return TaskToggledMsg{taskID: taskID, err: err}
 	}
 }
@@ -119,7 +119,7 @@ func (m DetailModel) Update(msg tea.Msg) (DetailModel, tea.Cmd) {
 				m.statusID += 1
 				return m, ClearStatusCmd(2*time.Second, m.statusID)
 			} else {
-				return m, toggleDoneCmd(m.store, m.detailedTask.ID)
+				return m, toggleDoneCmd(m.store, m.detailedTask.ID, m.detailedTask.Done)
 			}
 		case "x":
 			m.statusDelete = true

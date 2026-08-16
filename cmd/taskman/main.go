@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	api "github.com/Lev2307/taskman/internal/api"
 	storage "github.com/Lev2307/taskman/internal/storage"
@@ -21,8 +22,9 @@ func main() {
 	flag.Parse()
 	if *serve {
 		srv := api.NewServer(store)
+		httpServ := &http.Server{Addr: ":8080", Handler: srv.Routes(), ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second}
 		log.Println("listening on :8080")
-		if err := http.ListenAndServe(":8080", srv.Routes()); err != nil {
+		if err := httpServ.ListenAndServe(); err != nil {
 			log.Fatal(err)
 		}
 		return

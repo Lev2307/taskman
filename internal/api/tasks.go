@@ -58,12 +58,11 @@ func (srv *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "task with given id not found", http.StatusNotFound)
 		return
 	} else if deleteErr != nil {
-		log.Printf("edit task: %v", err)
+		log.Printf("delete task: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode("task was deleted successfully")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (srv *Server) handleEditTask(w http.ResponseWriter, r *http.Request) {
@@ -73,13 +72,20 @@ func (srv *Server) handleEditTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var t task.Task
-	if t.CreatedAt.IsZero() {
-		t.CreatedAt = time.Now()
-	}
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
+	existing, err := srv.store.GetByID(taskUrlID)
+	if err != nil {
+		if errors.Is(err, storage.ErrTaskNotFound) {
+			http.Error(w, "task with given id not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	t.CreatedAt = existing.CreatedAt
 	if taskUrlID != t.ID {
 		http.Error(w, "discrepancies with JSON and URL task id", http.StatusBadRequest)
 		return
@@ -127,4 +133,35 @@ func (srv *Server) handleToggleDoneTask(w http.ResponseWriter, r *http.Request) 
 		s = "You`r task is now COMPLETED!"
 	}
 	json.NewEncoder(w).Encode(s)
+}
+
+func (srv *Server) handleAddTask(w http.ResponseWriter, r *http.Request) {
+	var t task.Task
+	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if t.Title == "" {
+		http.Error(w, "title field is empty", http.StatusBadRequest)
+		return
+	}
+	if t.DueAt.Before(time.Now()) {
+		if t.DueAt.IsZero() {
+			http.Error(w, "dueAt field is required", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "due time is in past", http.StatusBadRequest)
+		return
+	}
+	t.CreatedAt = time.Now()
+	addedTask, err := srv.store.Add(t)
+	if err != nil {
+		log.Printf("task add: %v", err)
+		http.Error(w, "server internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", fmt.Sprintf("/tasks/%d", addedTask.ID))
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(addedTask)
 }

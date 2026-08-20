@@ -6,12 +6,11 @@ import (
 	"strings"
 
 	task "github.com/Lev2307/taskman/internal/model"
-	storage "github.com/Lev2307/taskman/internal/storage"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type ListModel struct {
-	store       *storage.Store
+	store       TaskStore
 	tasksList   []task.Task
 	taskIdInput string
 	statusMsg   string
@@ -25,11 +24,11 @@ type TaskListMsg struct {
 
 type BackToMainPageMsg struct{}
 
-func NewListModel(s *storage.Store) ListModel {
+func NewListModel(s TaskStore) ListModel {
 	return ListModel{store: s}
 }
 
-func ListTasksCmd(s *storage.Store) tea.Cmd {
+func ListTasksCmd(s TaskStore) tea.Cmd {
 	return func() tea.Msg {
 		tasks, err := s.List()
 		return TaskListMsg{listTasks: tasks, err: err}

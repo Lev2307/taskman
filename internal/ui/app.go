@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	task "github.com/Lev2307/taskman/internal/model"
-	storage "github.com/Lev2307/taskman/internal/storage"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -23,11 +22,11 @@ type App struct {
 	list      ListModel
 	detail    DetailModel
 	tasks     []task.Task
-	store     *storage.Store
+	store     TaskStore
 	statusMsg string
 }
 
-func New(s *storage.Store) App {
+func New(s TaskStore) App {
 	return App{store: s}
 }
 

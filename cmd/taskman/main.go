@@ -14,10 +14,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const PATH string = "tasks.json"
+const STORAGE_PATH string = "tasks.json"
+const API_PATH string = "http://localhost:8080"
 
 func main() {
-	store := storage.NewStore(PATH)
+	store := storage.NewStore(STORAGE_PATH)
 	serve := flag.Bool("serve", false, "запустить HTTP-сервер вместо TUI")
 	flag.Parse()
 	if *serve {
@@ -29,7 +30,8 @@ func main() {
 		}
 		return
 	}
-	app := ui.New(store)
+	client := ui.NewClient(API_PATH)
+	app := ui.New(client)
 	if _, err := tea.NewProgram(app).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

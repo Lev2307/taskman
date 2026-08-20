@@ -6,12 +6,11 @@ import (
 	"time"
 
 	task "github.com/Lev2307/taskman/internal/model"
-	storage "github.com/Lev2307/taskman/internal/storage"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type DetailModel struct {
-	store        *storage.Store
+	store        TaskStore
 	detailedTask task.Task
 	statusID     int
 	statusMsg    string
@@ -56,7 +55,7 @@ func backToListCmd() tea.Cmd {
 	}
 }
 
-func toggleDoneCmd(s *storage.Store, taskID int, done bool) tea.Cmd {
+func toggleDoneCmd(s TaskStore, taskID int, done bool) tea.Cmd {
 	return func() tea.Msg {
 		err := s.SetDone(taskID, done)
 		return TaskToggledMsg{taskID: taskID, err: err}
@@ -69,7 +68,7 @@ func ClearStatusCmd(d time.Duration, statusID int) tea.Cmd {
 	})
 }
 
-func DeleteTaskCmd(s *storage.Store, title string, taskID int) tea.Cmd {
+func DeleteTaskCmd(s TaskStore, title string, taskID int) tea.Cmd {
 	return func() tea.Msg {
 		err := s.Delete(taskID)
 		return DeleteTaskMsg{title: title, err: err}
@@ -82,7 +81,7 @@ func redirectToEditTaskCmd(task task.Task) tea.Cmd {
 	}
 }
 
-func NewDetailModel(s *storage.Store, taskID int, statusMessage string) DetailModel {
+func NewDetailModel(s TaskStore, taskID int, statusMessage string) DetailModel {
 	task, err := s.GetByID(taskID)
 	if err != nil {
 		return DetailModel{err: err, statusMsg: "error", store: s}

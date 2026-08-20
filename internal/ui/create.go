@@ -7,7 +7,6 @@ import (
 	"time"
 
 	task "github.com/Lev2307/taskman/internal/model"
-	storage "github.com/Lev2307/taskman/internal/storage"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -24,7 +23,7 @@ const (
 )
 
 type CreateModel struct {
-	store      *storage.Store
+	store      TaskStore
 	titleInput string
 	notesInput string
 
@@ -49,7 +48,7 @@ type TaskEditedMsg struct {
 	err  error
 }
 
-func NewCreateModel(s *storage.Store, mode formMode, t task.Task) CreateModel {
+func NewCreateModel(s TaskStore, mode formMode, t task.Task) CreateModel {
 	m := CreateModel{
 		tagChoices:  slices.Clone(availableTags),
 		tagSelected: make(map[int]struct{}),
@@ -79,14 +78,14 @@ func NewCreateModel(s *storage.Store, mode formMode, t task.Task) CreateModel {
 	return m
 }
 
-func AddTaskCmd(s *storage.Store, t task.Task) tea.Cmd {
+func AddTaskCmd(s TaskStore, t task.Task) tea.Cmd {
 	return func() tea.Msg {
 		task, err := s.Add(t)
 		return TaskAddedMsg{task: task, err: err}
 	}
 }
 
-func EditTaskCmd(s *storage.Store, t task.Task) tea.Cmd {
+func EditTaskCmd(s TaskStore, t task.Task) tea.Cmd {
 	return func() tea.Msg {
 		err := s.Edit(t)
 		return TaskEditedMsg{task: t, err: err}

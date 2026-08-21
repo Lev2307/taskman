@@ -92,6 +92,9 @@ func (m ListModel) Update(msg tea.Msg) (ListModel, tea.Cmd) {
 func (m ListModel) View() string {
 	var b strings.Builder
 	b.WriteString("You are on a list page!\n\n")
+	if m.err != nil {
+		fmt.Fprintf(&b, "⚠️  %s\n\n", m.err.Error())
+	}
 	if len(m.tasksList) == 0 {
 		b.WriteString(`✏️` + "  You haven`t created any tasks yet... Press [esc] and create a new one!\n\n")
 	} else {
@@ -112,12 +115,8 @@ func (m ListModel) View() string {
 			}
 			b.WriteString("\n\n")
 		}
-		fmt.Fprintf(&b, "You can choose task to work with by entering task id in form below: %s", m.taskIdInput)
-		if m.err != nil {
-			fmt.Fprintf(&b, "\n\n⚠️  %s", m.err.Error())
-		}
+		fmt.Fprintf(&b, "You can choose task to work with by entering task id in form below: %s\n", m.taskIdInput)
 	}
-
 	if m.statusMsg != "" {
 		b.WriteString("\n" + m.statusMsg + "\n")
 	}

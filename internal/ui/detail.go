@@ -24,8 +24,8 @@ type TaskDetailMsg struct {
 }
 
 type TaskToggledMsg struct {
-	taskID int
-	err    error
+	t   task.Task
+	err error
 }
 
 type BackToListMsg struct{}
@@ -57,8 +57,8 @@ func backToListCmd() tea.Cmd {
 
 func toggleDoneCmd(s TaskStore, taskID int, done bool) tea.Cmd {
 	return func() tea.Msg {
-		err := s.SetDone(taskID, done)
-		return TaskToggledMsg{taskID: taskID, err: err}
+		toggledTask, err := s.SetDone(taskID, done)
+		return TaskToggledMsg{t: toggledTask, err: err}
 	}
 }
 
@@ -118,7 +118,7 @@ func (m DetailModel) Update(msg tea.Msg) (DetailModel, tea.Cmd) {
 				m.statusID += 1
 				return m, ClearStatusCmd(2*time.Second, m.statusID)
 			} else {
-				return m, toggleDoneCmd(m.store, m.detailedTask.ID, m.detailedTask.Done)
+				return m, toggleDoneCmd(m.store, m.detailedTask.ID, !m.detailedTask.Done)
 			}
 		case "x":
 			m.statusDelete = true

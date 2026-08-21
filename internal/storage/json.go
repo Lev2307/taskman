@@ -100,20 +100,20 @@ func (s *Store) GetByID(taskID int) (task.Task, error) {
 	}
 }
 
-func (s *Store) SetDone(taskID int, done bool) error {
+func (s *Store) SetDone(taskID int, done bool) (task.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	allTasks, err := s.load()
 	if err != nil {
-		return err
+		return task.Task{}, err
 	}
 	for i := range allTasks {
 		if allTasks[i].ID == taskID {
 			allTasks[i].Done = done
-			return s.save(allTasks)
+			return allTasks[i], s.save(allTasks)
 		}
 	}
-	return ErrTaskNotFound
+	return task.Task{}, ErrTaskNotFound
 }
 
 func (s *Store) Delete(taskID int) error {
@@ -139,20 +139,20 @@ func (s *Store) Delete(taskID int) error {
 	}
 }
 
-func (s *Store) Edit(t task.Task) error {
+func (s *Store) Edit(t task.Task) (task.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	allTasks, err := s.load()
 	if err != nil {
-		return err
+		return task.Task{}, err
 	}
 	for i := range allTasks {
 		if t.ID == allTasks[i].ID {
 			allTasks[i] = t
-			return s.save(allTasks)
+			return t, s.save(allTasks)
 		}
 	}
-	return ErrTaskNotFound
+	return task.Task{}, ErrTaskNotFound
 }
 
 func (s *Store) List() ([]task.Task, error) {

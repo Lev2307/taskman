@@ -87,8 +87,8 @@ func AddTaskCmd(s TaskStore, t task.Task) tea.Cmd {
 
 func EditTaskCmd(s TaskStore, t task.Task) tea.Cmd {
 	return func() tea.Msg {
-		err := s.Edit(t)
-		return TaskEditedMsg{task: t, err: err}
+		editedTask, err := s.Edit(t)
+		return TaskEditedMsg{task: editedTask, err: err}
 	}
 }
 

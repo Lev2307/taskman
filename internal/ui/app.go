@@ -50,6 +50,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TaskDetailMsg:
 		if msg.err == nil {
 			a.screen = screenDetail
+			a.detail = NewDetailModel(a.store, msg.detailTaskMsg.ID, "")
 		}
 	case RedirectToEditTask:
 		a.screen = screenCreate
@@ -62,7 +63,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.screen = screenMain
 	case TaskToggledMsg:
 		a.screen = screenDetail
-		a.detail = NewDetailModel(a.store, msg.taskID, "")
+		a.detail = NewDetailModel(a.store, msg.t.ID, "")
 	case DeleteTaskMsg:
 		a.screen = screenList
 		a.list = NewListModel(a.store)

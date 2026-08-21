@@ -90,7 +90,7 @@ func (srv *Server) handleEditTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "discrepancies with JSON and URL task id", http.StatusBadRequest)
 		return
 	}
-	editErr := srv.store.Edit(t)
+	editedTask, editErr := srv.store.Edit(t)
 	if editErr != nil {
 		if errors.Is(editErr, storage.ErrTaskNotFound) {
 			http.Error(w, "task with given id not found", http.StatusNotFound)
@@ -102,7 +102,7 @@ func (srv *Server) handleEditTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(fmt.Sprintf("your task with id - %d was edited successfully", t.ID))
+	json.NewEncoder(w).Encode(editedTask)
 }
 
 func (srv *Server) handleToggleDoneTask(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +118,8 @@ func (srv *Server) handleToggleDoneTask(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	if err := srv.store.SetDone(taskID, body.Done); err != nil {
+	toggledTask, err := srv.store.SetDone(taskID, body.Done)
+	if err != nil {
 		if errors.Is(err, storage.ErrTaskNotFound) {
 			http.Error(w, "task with given id not found", http.StatusNotFound)
 			return
@@ -128,11 +129,7 @@ func (srv *Server) handleToggleDoneTask(w http.ResponseWriter, r *http.Request) 
 	}
 	w.Header().Set("Content-Type", "application/json")
 
-	s := "You`r task is now INcompleted!"
-	if body.Done {
-		s = "You`r task is now COMPLETED!"
-	}
-	json.NewEncoder(w).Encode(s)
+	json.NewEncoder(w).Encode(toggledTask)
 }
 
 func (srv *Server) handleAddTask(w http.ResponseWriter, r *http.Request) {

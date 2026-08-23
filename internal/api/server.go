@@ -3,14 +3,14 @@ package api
 import (
 	"net/http"
 
-	storage "github.com/Lev2307/taskman/internal/storage"
+	task "github.com/Lev2307/taskman/internal/model"
 )
 
 type Server struct {
-	store *storage.Store
+	store task.TaskStore
 }
 
-func NewServer(s *storage.Store) *Server {
+func NewServer(s task.TaskStore) *Server {
 	return &Server{store: s}
 }
 

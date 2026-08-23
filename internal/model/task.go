@@ -11,3 +11,12 @@ type Task struct {
 	CreatedAt time.Time `json:"createdAt"`
 	DueAt     time.Time `json:"dueAt"`
 }
+
+type TaskStore interface {
+	List() ([]Task, error)
+	GetByID(taskID int) (Task, error)
+	Add(t Task) (Task, error)
+	Edit(t Task) (Task, error)
+	Delete(taskID int) error
+	SetDone(taskID int, done bool) (Task, error)
+}

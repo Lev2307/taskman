@@ -7,5 +7,9 @@
 *.so
 *.dylib
 *.claude
+
 # App data
 tasks.json
+tasks.db
+tasks.db-shm
+tasks.db-wal

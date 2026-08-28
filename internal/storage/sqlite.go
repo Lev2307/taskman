@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	task "github.com/Lev2307/taskman/internal/model"
@@ -46,6 +48,30 @@ func scanTask(sc rowScanner) (task.Task, error) {
 	}
 
 	return t, nil
+}
+
+func NormalizeTags(tags []string) []string {
+	nonEmptyTags := make([]string, 0, len(tags))
+	for i := range tags {
+		tag := strings.ToLower(tags[i])
+		tag = strings.TrimSpace(tag)
+		if tag != "" {
+			nonEmptyTags = append(nonEmptyTags, tag)
+		}
+	}
+	tagNames := make(map[string]struct{}, len(nonEmptyTags))
+	for i := range nonEmptyTags {
+		if _, ok := tagNames[nonEmptyTags[i]]; !ok {
+			tagNames[nonEmptyTags[i]] = struct{}{}
+		}
+	}
+	newTags := make([]string, 0, len(nonEmptyTags))
+	for i := range tagNames {
+		newTags = append(newTags, i)
+	}
+
+	slices.Sort(newTags)
+	return newTags
 }
 
 func NewSQLiteStore(s *sql.DB) *SQLiteStore {
@@ -128,6 +154,12 @@ func (s *SQLiteStore) GetByID(taskID int) (task.Task, error) {
 }
 
 func (s *SQLiteStore) Add(t task.Task) (task.Task, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return task.Task{}, err
+	}
+	defer tx.Rollback()
+
 	createdAt := t.CreatedAt.UTC().Format(time.RFC3339)
 	dueAt := t.DueAt.UTC().Format(time.RFC3339)
 	query := `
@@ -135,12 +167,32 @@ func (s *SQLiteStore) Add(t task.Task) (task.Task, error) {
 	VALUES (?, ?, ?, ?, ?)
 	RETURNING id, title, notes, done, createdAt, dueAt;
 	`
-	row := s.db.QueryRow(query, t.Title, t.Notes, t.Done, createdAt, dueAt)
-
+	row := tx.QueryRow(query, t.Title, t.Notes, t.Done, createdAt, dueAt)
 	tScanned, err := scanTask(row)
 	if err != nil {
 		return task.Task{}, err
 	}
+
+	tags := NormalizeTags(t.Tags)
+	for _, tag := range tags {
+		tagQuery := `
+		INSERT INTO tags (name) VALUES (?)
+		ON CONFLICT(name) DO UPDATE SET name = excluded.name
+		RETURNING id;
+		`
+		var tagID int64
+		err := tx.QueryRow(tagQuery, tag).Scan(&tagID)
+		if err != nil {
+			return task.Task{}, err
+		}
+		if _, err := tx.Exec("INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)", tScanned.ID, tagID); err != nil {
+			return task.Task{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return task.Task{}, err
+	}
+	tScanned.Tags = tags
 	return tScanned, nil
 }
 

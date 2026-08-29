@@ -74,6 +74,26 @@ func NormalizeTags(tags []string) []string {
 	return newTags
 }
 
+func upsertTags(tx *sql.Tx, t task.Task, dataTags []string) error {
+	tagsNorm := NormalizeTags(dataTags)
+	for _, tag := range tagsNorm {
+		tagQuery := `
+		INSERT INTO tags (name) VALUES (?)
+		ON CONFLICT(name) DO UPDATE SET name = excluded.name
+		RETURNING id;
+		`
+		var tagID int64
+		err := tx.QueryRow(tagQuery, tag).Scan(&tagID)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec("INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)", t.ID, tagID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func NewSQLiteStore(s *sql.DB) *SQLiteStore {
 	return &SQLiteStore{db: s}
 }
@@ -123,11 +143,16 @@ func NewDatabase(dbPath string) (*sql.DB, error) {
 }
 
 func (s *SQLiteStore) List() ([]task.Task, error) {
-	rows, err := s.db.Query("SELECT id, title, notes, done, createdAt, dueAt FROM tasks ORDER BY id;")
+	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer tx.Rollback()
+
+	rows, err := tx.Query("SELECT id, title, notes, done, createdAt, dueAt FROM tasks ORDER BY id")
+	if err != nil {
+		return nil, err
+	}
 
 	var tasks []task.Task
 	for rows.Next() {
@@ -137,19 +162,93 @@ func (s *SQLiteStore) List() ([]task.Task, error) {
 		}
 		tasks = append(tasks, t)
 	}
+	defer rows.Close()
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	taskMap := make(map[int][]string, len(tasks))
+	for i := range tasks {
+		_, ok := taskMap[tasks[i].ID]
+		if !ok {
+			tagQuery := `
+			SELECT tags.name from tags
+			JOIN task_tags tt ON tt.tag_id = tags.id WHERE tt.task_id = ? ORDER BY tags.name;
+			`
+			tagRows, err := tx.Query(tagQuery, tasks[i].ID)
+			if err != nil {
+				return nil, err
+			}
+
+			var taskTags []string
+			for tagRows.Next() {
+				var tagName string
+				if err := tagRows.Scan(&tagName); err != nil {
+					tagRows.Close()
+					return nil, err
+				}
+				taskTags = append(taskTags, tagName)
+			}
+
+			if err := tagRows.Err(); err != nil {
+				return nil, err
+			}
+
+			taskMap[tasks[i].ID] = taskTags
+		}
+	}
+
+	for i := range tasks {
+		if tTags, ok := taskMap[tasks[i].ID]; ok {
+			tasks[i].Tags = tTags
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return tasks, nil
 }
 
 func (s *SQLiteStore) GetByID(taskID int) (task.Task, error) {
-	row := s.db.QueryRow("SELECT id, title, notes, done, createdAt, dueAt FROM tasks WHERE id = ?;", taskID)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return task.Task{}, err
+	}
+	defer tx.Rollback()
+	row := tx.QueryRow("SELECT id, title, notes, done, createdAt, dueAt FROM tasks WHERE id = ?;", taskID)
 
 	t, err := scanTask(row)
 	if err != nil {
 		return task.Task{}, err
 	}
+
+	tagsQuery := `
+	SELECT tag.name FROM tags tag 
+	JOIN task_tags tt ON tt.tag_id = tag.id WHERE tt.task_id = ? ORDER BY tag.name;
+	`
+	rows, err := tx.Query(tagsQuery, taskID)
+	if err != nil {
+		return task.Task{}, err
+	}
+	defer rows.Close()
+
+	var tags []string
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return task.Task{}, err
+		}
+		tags = append(tags, tag)
+	}
+	if err := rows.Err(); err != nil {
+		return task.Task{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return task.Task{}, err
+	}
+	t.Tags = tags
 	return t, nil
 }
 
@@ -161,7 +260,11 @@ func (s *SQLiteStore) Add(t task.Task) (task.Task, error) {
 	defer tx.Rollback()
 
 	createdAt := t.CreatedAt.UTC().Format(time.RFC3339)
-	dueAt := t.DueAt.UTC().Format(time.RFC3339)
+	var dueAt *string
+	if !t.DueAt.IsZero() {
+		dueAtFormatted := t.DueAt.UTC().Format(time.RFC3339)
+		dueAt = &dueAtFormatted
+	}
 	query := `
 	INSERT INTO tasks (title, notes, done, createdAt, dueAt)
 	VALUES (?, ?, ?, ?, ?)
@@ -173,43 +276,63 @@ func (s *SQLiteStore) Add(t task.Task) (task.Task, error) {
 		return task.Task{}, err
 	}
 
-	tags := NormalizeTags(t.Tags)
-	for _, tag := range tags {
-		tagQuery := `
-		INSERT INTO tags (name) VALUES (?)
-		ON CONFLICT(name) DO UPDATE SET name = excluded.name
-		RETURNING id;
-		`
-		var tagID int64
-		err := tx.QueryRow(tagQuery, tag).Scan(&tagID)
-		if err != nil {
-			return task.Task{}, err
-		}
-		if _, err := tx.Exec("INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)", tScanned.ID, tagID); err != nil {
-			return task.Task{}, err
-		}
+	tagsNorm := NormalizeTags(t.Tags)
+	if err := upsertTags(tx, tScanned, tagsNorm); err != nil {
+		return task.Task{}, err
 	}
+
 	if err := tx.Commit(); err != nil {
 		return task.Task{}, err
 	}
-	tScanned.Tags = tags
+	tScanned.Tags = tagsNorm
 	return tScanned, nil
 }
 
 func (s *SQLiteStore) Edit(t task.Task) (task.Task, error) {
-	dueAt := t.DueAt.UTC().Format(time.RFC3339)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return task.Task{}, err
+	}
+	defer tx.Rollback()
+	var dueAt *string
+	if !t.DueAt.IsZero() {
+		dueAtFormatted := t.DueAt.UTC().Format(time.RFC3339)
+		dueAt = &dueAtFormatted
+	}
 	query := `
 	UPDATE tasks
 	SET title = ?, notes = ?, done = ?, dueAt = ?
 	WHERE id = ?
 	RETURNING id, title, notes, done, createdAt, dueAt;
 	`
-	row := s.db.QueryRow(query, t.Title, t.Notes, t.Done, dueAt, t.ID)
+	row := tx.QueryRow(query, t.Title, t.Notes, t.Done, dueAt, t.ID)
 
 	taskScanned, err := scanTask(row)
 	if err != nil {
 		return task.Task{}, err
 	}
+
+	deletePrevTaskConsQuery := `DELETE FROM task_tags WHERE task_tags.task_id = ?`
+	res, err := tx.Exec(deletePrevTaskConsQuery, taskScanned.ID)
+	if err != nil {
+		return task.Task{}, err
+	}
+
+	n, err := res.RowsAffected()
+	if n == 0 {
+		return task.Task{}, err
+	}
+
+	tagsNorm := NormalizeTags(t.Tags)
+	if err := upsertTags(tx, taskScanned, tagsNorm); err != nil {
+		return task.Task{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return task.Task{}, err
+	}
+	taskScanned.Tags = tagsNorm
+
 	return taskScanned, nil
 }
 
@@ -232,6 +355,11 @@ func (s *SQLiteStore) Delete(taskID int) error {
 }
 
 func (s *SQLiteStore) SetDone(taskID int, done bool) (task.Task, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return task.Task{}, err
+	}
+	defer tx.Rollback()
 	query := `
 	UPDATE tasks
 	SET done = ?
@@ -239,11 +367,38 @@ func (s *SQLiteStore) SetDone(taskID int, done bool) (task.Task, error) {
 	RETURNING id, title, notes, done, createdAt, dueAt;
 	`
 
-	row := s.db.QueryRow(query, done, taskID)
-
+	row := tx.QueryRow(query, done, taskID)
 	scannedT, err := scanTask(row)
 	if err != nil {
 		return task.Task{}, err
 	}
+
+	tagsQuery := `
+	SELECT tag.name FROM tags tag 
+	JOIN task_tags tt ON tt.tag_id = tag.id WHERE tt.task_id = ? ORDER BY tag.name;
+	`
+	rows, err := tx.Query(tagsQuery, taskID)
+	if err != nil {
+		return task.Task{}, err
+	}
+	defer rows.Close()
+
+	var tags []string
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return task.Task{}, err
+		}
+		tags = append(tags, tag)
+	}
+
+	if err := rows.Err(); err != nil {
+		return task.Task{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return task.Task{}, err
+	}
+	scannedT.Tags = tags
 	return scannedT, nil
 }
